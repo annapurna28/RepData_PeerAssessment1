@@ -1,25 +1,143 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
----
+title: "Sample Document"
+output: md_document
+--- 
 
+##Loading and preprocessing the data
 
-## Loading and preprocessing the data
+```{r  set working directory}
+setwd("D:/Study Materials/CourseEra Videos/Reproduciable Research/HomeWork")
+```
 
+```{r  download data}
+filename = "RepData_PeerAssessment1.zip"
+if (!file.exists(filename)) {
+  loaddata = download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip",
+                           destfile = filename)
+}
+```
 
+```{r  read csv}
+activity = read.csv(unz("RepData_PeerAssessment1.zip", "activity.csv"), header=T,  colClasses=c("numeric","character","numeric"))
+head(activity)
+library(lattice)
+```
 
-## What is mean total number of steps taken per day?
+##What is mean total number of steps taken per day?
+```{r Histogram }
+library(lattice)
+activity$date <- as.Date(activity$date, "%Y-%m-%d")
+StepsTotal <- aggregate(steps ~ date, data = activity, sum, na.rm = TRUE)
+hist(StepsTotal$steps, main = "Total steps by day", xlab = "day", col = "red")
+```
 
+```{r  Calculate the mean and median of the total number of steps taken per day }
+mean(StepsTotal$steps)
+median(StepsTotal$steps)
+```
 
+##What is the average daily activity pattern?
 
-## What is the average daily activity pattern?
+```{r Line graph }
+time_series <- tapply(activity$steps, activity$interval, mean, na.rm = TRUE)
 
+plot(row.names(time_series), time_series, type = "l", xlab = "5-min interval", 
+    ylab = "Average across all Days", main = "Average number of steps taken", 
+    col = "red")
+    
+max_interval <- which.max(time_series)
+names(max_interval)
+```
 
+##Imputing missing values
+#####Question -1 : Summarize all the missing values
+```{r  Summarize all the missing values}
+activity_MissingVal <- sum(is.na(activity))
+activity_MissingVal 
+```
+#####  Question - 2 & 3 : 
+#####    a. Let's take the approach to fill in a missing NA with the average number of steps in the same 5-min interval.
+#####    b. Create a new dataset as the original and use tapply for filling in the missing values with the average number of steps per 5-minute interval:
+```{r  }
+data_full <- activity
+nas <- is.na(data_full$steps)
+avg_interval <- tapply(data_full$steps, data_full$interval, mean, na.rm=TRUE, simplify=TRUE)
+data_full$steps[nas] <- avg_interval[as.character(data_full$interval[nas])]
+```
+##### Question - 4:  Calculate the number of steps taken in each 5-minute interval per day using dplyr and group by interval. Use ggplot for making the histogram
 
-## Imputing missing values
+##### check if missing values are there 
+```{r  remove missing value }
+sum(is.na(data_full$steps))
+```
+##### Calculate the number of steps taken in each 5-minute interval per day using 
+##### a. Create a new dataset that is equal to the original dataset but with the missing data filled in
+```{r }
+newData <- data_full 
+for (i in 1:nrow(newData)) {
+    if (is.na(newData$steps[i])) {
+        newData$steps[i] <- avgSteps[which(newData$interval[i] == avgSteps$interval), ]$meanOfSteps
+    }
+}
 
+head(newData)
 
+sum(is.na(newData))
+  
+```
 
-## Are there differences in activity patterns between weekdays and weekends?
+##### b. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day.
+```{r histogram-2 }
+library(ggplot2)
+ggplot(newData, aes( steps)) +
+  geom_histogram(fill = "firebrick", binwidth = 1000) +
+  labs(title = "Histogram of Steps per day, including missing values", x = "Steps per day", y = "Frequency")
+
+```
+
+##### Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+##### Mean total number of steps taken per day
+```{r }
+newTotalSteps <- aggregate(newData$steps, 
+                           list(Date = newData$date), 
+                           FUN = "sum")$x
+newMean <- mean(newTotalSteps)
+newMean
+```
+##### Median total number of steps taken per day
+```{r }
+newMedian <- median(newTotalSteps)
+newMedian
+```
+##### Compare them with the two before imputing missing data:
+oldMean <- mean(totalSteps)
+oldMedian <- median(totalSteps)
+newMean - oldMean
+newMedian - oldMedian
+##### So, after imputing the missing data, the new mean of total steps taken per day is the same as that of the old mean; the new median of total steps taken per day is greater than that of the old median.
+
+##Are there differences in activity patterns between weekdays and weekends?
+```{r Graph for weekday and weekend}
+day <- weekdays(activity$date)
+daylevel <- vector()
+for (i in 1:nrow(activity)) {
+    if (day[i] == "Saturday") {
+        daylevel[i] <- "Weekend"
+    } else if (day[i] == "Sunday") {
+        daylevel[i] <- "Weekend"
+    } else {
+        daylevel[i] <- "Weekday"
+    }
+}
+
+head(activity)
+
+activity$daylevel <- daylevel
+activity$daylevel <- factor(activity$daylevel)
+
+stepsByDay <- aggregate(steps ~ interval + daylevel, data = activity, mean)
+names(stepsByDay) <- c("interval", "daylevel", "steps")
+
+xyplot(steps ~ interval | daylevel, stepsByDay, type = "l", layout = c(1, 2), 
+    xlab = "Interval", ylab = "Number of steps")
+```
